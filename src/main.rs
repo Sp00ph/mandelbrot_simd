@@ -11,7 +11,7 @@ use std::{path::PathBuf, simd::prelude::*};
 use std::time::Instant;
 
 const LANES: usize = 8;
-type Reg = Simd<f32, LANES>;
+type Reg = Simd<f64, LANES>;
 
 #[derive(Clone, Copy)]
 struct SimdComplex {
@@ -41,7 +41,7 @@ fn mandelbrot_iterations_simd(c: SimdComplex, max_iterations: u32) -> [u32; LANE
     let mut iterations = U32Reg::splat(max_iterations);
 
     for i in 0..max_iterations {
-        let mask = z.norm2().simd_ge(Reg::splat(4.0));
+        let mask = z.norm2().simd_ge(Reg::splat(4.0)).cast();
         let current_iteration = mask.select(U32Reg::splat(i + 1), U32Reg::splat(max_iterations));
         iterations = iterations.simd_min(current_iteration);
         z = z.square_add(c);
@@ -53,7 +53,7 @@ fn mandelbrot_iterations_simd(c: SimdComplex, max_iterations: u32) -> [u32; LANE
     iterations.to_array()
 }
 
-fn mandelbrot_iterations(vals: (f32, f32), max_iterations: u32) -> u32 {
+fn mandelbrot_iterations(vals: (f64, f64), max_iterations: u32) -> u32 {
     let mut z = (0.0, 0.0);
     for i in 0..max_iterations {
         z = (z.0 * z.0 - z.1 * z.1 + vals.0, 2.0 * z.0 * z.1 + vals.1);
@@ -68,14 +68,14 @@ pub struct Grid {
     pub width: u32,
     pub height: u32,
     pub pixels: RgbImage,
-    pub x_min: f32,
-    pub x_max: f32,
-    pub y_min: f32,
-    pub y_max: f32,
+    pub x_min: f64,
+    pub x_max: f64,
+    pub y_min: f64,
+    pub y_max: f64,
 }
 
 impl Grid {
-    pub fn new(width: u32, height: u32, x_min: f32, x_max: f32, y_min: f32, y_max: f32) -> Self {
+    pub fn new(width: u32, height: u32, x_min: f64, x_max: f64, y_min: f64, y_max: f64) -> Self {
         Self {
             width,
             height,
@@ -122,8 +122,8 @@ impl Grid {
         );
 
         let pix_to_coord = |x: u32, y: u32| {
-            let x = (x as f32) / width as f32;
-            let y = ((height - y) as f32) / height as f32;
+            let x = (x as f64) / width as f64;
+            let y = ((height - y) as f64) / height as f64;
             (x_min + (x_max - x_min) * x, y_min + (y_max - y_min) * y)
         };
 
@@ -142,9 +142,9 @@ impl Grid {
                 let row = row as u32;
                 let mut col = 0;
                 while col + LANES as u32 <= self.width {
-                    let x_off = (x_max - x_min) / width as f32;
+                    let x_off = (x_max - x_min) / width as f64;
                     let (x1, y) = pix_to_coord(col, row);
-                    let offsets = Reg::from_array(std::array::from_fn(|i| x_off * (i as f32)));
+                    let offsets = Reg::from_array(std::array::from_fn(|i| x_off * (i as f64)));
                     let coords = SimdComplex {
                         re: Reg::splat(x1) + offsets,
                         im: Reg::splat(y),
@@ -177,13 +177,13 @@ struct Args {
     #[clap(short, long)]
     rows: u32,
     #[clap(short, default_value = "-0.74936425")]
-    x: f32,
+    x: f64,
     #[clap(short, default_value = "0.0316384815")]
-    y: f32,
+    y: f64,
     #[clap(short, long, default_value = "0.0002475")]
-    width: f32,
+    width: f64,
     #[clap(short, long, default_value = "0.000141897")]
-    height: f32,
+    height: f64,
     #[clap(short = 'M', long, default_value = "4096")]
     max_iterations: u32,
     #[clap(short, long, default_value = "mandelbrot.png")]
